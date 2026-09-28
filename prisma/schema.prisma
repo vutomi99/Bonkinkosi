@@ -1,0 +1,139 @@
+// prisma/schema.prisma
+//
+// Real, persistent data model for the Aegis SOC console. Nothing is
+// seeded: analyst accounts are created with `npm run user:create`,
+// endpoints register themselves the first time an agent reports in, and
+// every Alert + TimelineEntry + Report row is created by real activity.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  // Prisma 7: the connection URL lives in prisma.config.ts (CLI) and is
+  // passed to PrismaClient via the better-sqlite3 adapter (lib/prisma.js).
+}
+
+/// A monitored host. Created automatically the first time an agent
+/// reports under a new endpoint code (POST /api/ingest/*).
+model Endpoint {
+  id        String   @id @default(cuid())
+  code      String   @unique // "EP-001"
+  createdAt DateTime @default(now())
+
+  alerts    Alert[]
+  incidents Incident[]
+}
+
+/// An analyst account. Only analysts with a passwordHash can sign in;
+/// accounts are created with `npm run user:create` (no self-registration).
+model Analyst {
+  id           String   @id @default(cuid())
+  name         String
+  email        String?  @unique
+  passwordHash String? // "scrypt$<salt>$<hash>", see lib/auth.js
+  createdAt    DateTime @default(now())
+
+  assignedAlerts Alert[]
+  sessions       Session[]
+}
+
+/// A signed-in browser. The cookie holds a random token; only its SHA-256
+/// hash is stored here, so a leaked database can't be used to log in.
+model Session {
+  id        String   @id // sha256(token)
+  analyst   Analyst  @relation(fields: [analystId], references: [id], onDelete: Cascade)
+  analystId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([analystId])
+}
+
+/// A real, AI-flagged security event. Created either by the live
+/// simulation tick (POST /api/simulate/tick, source="simulated") or by a
+/// real detection reported from a victim VM's own logs
+/// (POST /api/ingest/ssh-bruteforce, source="live-agent") - never seeded.
+model Alert {
+  id        String @id @default(cuid())
+  eventId   String @unique // "EVT-LIVE-0001" or "EVT-AGENT-..."
+
+  endpoint   Endpoint @relation(fields: [endpointId], references: [id])
+  endpointId String
+
+  attackType String // brute_force | malware_cpu_spike | port_scan | data_exfiltration
+  riskScore  Float
+  status     String  @default("New") // New | Investigating | Contained | Resolved
+
+  assignedAnalyst   Analyst? @relation(fields: [assignedAnalystId], references: [id])
+  assignedAnalystId String?
+
+  cpuUsage          Float
+  networkBytes      Int
+  failedLogins      Int
+  connectionsPerMin Float
+
+  source   String  @default("simulated") // simulated | live-agent
+  sourceIp String? // real attacker IP, only set for source="live-agent"
+
+  incident   Incident? @relation(fields: [incidentId], references: [id])
+  incidentId String?
+
+  emailStatus String? // sending | sent | simulated | failed
+
+  createdAt DateTime @default(now())
+
+  timeline TimelineEntry[]
+
+  @@index([status])
+  @@index([riskScore])
+  @@index([endpointId])
+  @@index([incidentId])
+}
+
+/// A group of 2+ real Alerts on the same endpoint within a short
+/// correlation window (see CORRELATION_WINDOW_MINUTES in lib/correlate.js)
+/// - the system's answer to "correlate related security events... into a
+/// potential incident" (FR-09). Created automatically by
+/// lib/correlate.js:correlateAlert(), called right after every real Alert
+/// is created (both the simulator and the live agent path) - never
+/// seeded, and a lone alert with nothing else nearby never gets one.
+/// Status and severity are derived from member alerts on read, not
+/// stored, so they can never drift out of sync.
+model Incident {
+  id         String   @id @default(cuid())
+  endpoint   Endpoint @relation(fields: [endpointId], references: [id])
+  endpointId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  alerts Alert[]
+
+  @@index([endpointId])
+}
+
+/// One entry in a case's audit trail - detection, status changes,
+/// reassignments, analyst notes, email reports. Append-only.
+model TimelineEntry {
+  id        String   @id @default(cuid())
+  alert     Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  alertId   String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([alertId])
+}
+
+/// A generated shift/incident report snapshotting alert counts at the
+/// moment it was generated. Created only via POST /api/reports.
+model Report {
+  id            String   @id @default(cuid())
+  title         String
+  generatedBy   String
+  openCount     Int
+  investigating Int
+  contained     Int
+  resolved      Int
+  createdAt     DateTime @default(now())
+}

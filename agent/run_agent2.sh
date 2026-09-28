@@ -1,0 +1,1 @@
+SOC_URL=http://192.168.56.1:3000/api/ingest/ssh-bruteforce INGEST_KEY=bonginkosi ENDPOINT_CODE=EP-001 python ssh_bruteforce_watcher_py2.py
