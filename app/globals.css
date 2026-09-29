@@ -48,12 +48,21 @@
     margin-bottom:36px;
   }
   .brand-mark{
-    width:34px; height:34px;
-    border-radius:8px;
+    width:56px; height:56px;
+    border-radius:12px;
     background:linear-gradient(135deg, var(--info), #2B5FD9);
     display:flex; align-items:center; justify-content:center;
-    font-weight:700; font-size:15px; color:#fff;
     flex-shrink:0;
+  }
+  .brand-radar{ display:block; }
+  .brand-radar-sweep{
+    transform-box:view-box;
+    transform-origin:50px 50px;
+    animation:radar-spin 2.6s linear infinite;
+  }
+  @keyframes radar-spin{ to{ transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce){
+    .brand-radar-sweep{ animation:none; }
   }
   .login-brand-text{display:flex; flex-direction:column; line-height:1.15;}
   .login-brand-text b{font-size:16px; letter-spacing:0.2px;}

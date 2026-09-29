@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -27,10 +28,10 @@ export default function LoginScreen({ onLogin }) {
     <div id="login-screen">
       <form className="login-card" onSubmit={submit}>
         <div className="login-brand">
-          <div className="brand-mark">Æ</div>
+          <div className="brand-mark"><BrandLogo /></div>
           <div className="login-brand-text">
-            <b>Aegis SOC Console</b>
-            <span>AI-Driven Integrated Security Platform</span>
+            <b>AI-Driven Integrated SOC</b>
+            <span>Security Operations Console</span>
           </div>
         </div>
         <div className="login-title">Sign in to the console</div>

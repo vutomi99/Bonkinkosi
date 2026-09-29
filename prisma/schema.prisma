@@ -10,9 +10,10 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  // Prisma 7: the connection URL lives in prisma.config.ts (CLI) and is
-  // passed to PrismaClient via the better-sqlite3 adapter (lib/prisma.js).
+  provider = "postgresql"
+  // Prisma 7: the connection URL (DATABASE_URL in .env.local) is read by
+  // prisma.config.ts for the CLI and passed to PrismaClient via the
+  // node-postgres adapter (lib/prisma.js).
 }
 
 /// A monitored host. Created automatically the first time an agent

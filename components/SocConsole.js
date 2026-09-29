@@ -347,7 +347,7 @@ export default function SocConsole() {
   }
 
   async function handleSignOut() {
-    if (!confirm("Sign out of the Aegis SOC Console?")) return;
+    if (!confirm("Sign out of the AI-Driven Integrated SOC?")) return;
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {

@@ -1,4 +1,5 @@
 "use client";
+import BrandLogo from "@/components/BrandLogo";
 
 const NAV_ITEMS = [
   { key: "alerts", label: "Alert queue" },
@@ -13,10 +14,10 @@ export default function Sidebar({ activePage, onNavigate }) {
   return (
     <div className="sidebar">
       <div className="sidebar-brand">
-        <div className="brand-mark">Æ</div>
+        <div className="brand-mark"><BrandLogo /></div>
         <div className="login-brand-text">
-          <b>Aegis SOC</b>
-          <span>Console v0.9 &middot; Next.js</span>
+          <b>AI-Driven Integrated SOC</b>
+          <span>v0.9 &middot; Next.js</span>
         </div>
       </div>
       {NAV_ITEMS.map((item) => (

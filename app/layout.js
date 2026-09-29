@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Aegis SOC Console",
+  title: "AI-Driven Integrated SOC",
   description: "AI-Driven Integrated Security Operating System console",
 };
 
