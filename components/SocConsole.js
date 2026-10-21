@@ -9,11 +9,16 @@ import FilterChips from "@/components/FilterChips";
 import Drawer from "@/components/Drawer";
 import Toasts from "@/components/Toasts";
 import AlertQueuePage from "@/components/pages/AlertQueuePage";
+import MyCasesPage from "@/components/pages/MyCasesPage";
 import IncidentsPage from "@/components/pages/IncidentsPage";
 import EndpointsPage from "@/components/pages/EndpointsPage";
 import NetworkPage from "@/components/pages/NetworkPage";
 import RiskPage from "@/components/pages/RiskPage";
 import ReportsPage from "@/components/pages/ReportsPage";
+import AdminPage from "@/components/pages/AdminPage";
+
+const canRespond = (role) => role === "analyst" || role === "admin";
+const canAdminister = (role) => role === "admin";
 
 // Synthetic event generator (/api/simulate/tick). Off by default - only real
 // alerts from agents (/api/ingest/*) appear unless this is set in .env.
@@ -65,7 +70,7 @@ export default function SocConsole() {
   }
 
   function signedIn(analyst) {
-    setUser({ name: analyst.name, email: analyst.email, analystId: analyst.id });
+    setUser({ name: analyst.name, email: analyst.email, analystId: analyst.id, role: analyst.role || "analyst" });
     loadConsole();
   }
 
@@ -84,6 +89,22 @@ export default function SocConsole() {
       setReports(reportsRes.reports);
       setIncidents(incidentsRes.incidents);
       setEndpoints(endpointsRes.endpoints);
+
+      // Seed the live feed + risk chart with the most recent alerts so the
+      // panels aren't empty on load (they otherwise only fill on new events).
+      const recent = [...alertsRes.alerts]
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .slice(-20);
+      setConsoleLines(
+        recent.map((a) => ({
+          key: a.id,
+          time: new Date(a.createdAt).toLocaleTimeString("en-GB", { hour12: false }),
+          endpoint: a.endpoint.code,
+          summary: `logins=${a.failedLogins} src=${a.sourceIp || "n/a"} → risk ${a.riskScore}`,
+          flagged: a.riskScore >= ALERT_THRESHOLD,
+        }))
+      );
+      setSparkPoints(recent.map((a) => a.riskScore));
     } catch (err) {
       console.error(err);
       pushToast({ title: "\u2715 Could not load console", body: String(err.message || err) });
@@ -216,11 +237,27 @@ export default function SocConsole() {
         setAlerts((prev) => {
           const knownIds = new Set(prev.map((a) => a.id));
           const newlyArrived = alertsRes.alerts.filter((a) => !knownIds.has(a.id) && a.source === "live-agent");
-          newlyArrived.forEach((a) => {
+          // Oldest-first so the live feed and chart read in arrival order.
+          const ordered = [...newlyArrived].sort(
+            (x, y) => new Date(x.createdAt) - new Date(y.createdAt)
+          );
+          ordered.forEach((a) => {
             pushToast({
               title: `\ud83d\udee1\ufe0f Real attack detected \u2014 risk ${a.riskScore}`,
               body: `${ATTACK_META[a.attackType].label} from ${a.sourceIp} on ${a.endpoint.code} (live agent)`,
             });
+            const time = new Date(a.createdAt).toLocaleTimeString("en-GB", { hour12: false });
+            const summary = `logins=${a.failedLogins} src=${a.sourceIp || "n/a"} \u2192 risk ${a.riskScore}`;
+            setConsoleLines((prevLines) => {
+              if (prevLines.some((l) => l.key === a.id)) return prevLines;
+              const next = [...prevLines, { key: a.id, time, endpoint: a.endpoint.code, summary, flagged: a.riskScore >= ALERT_THRESHOLD }];
+              return next.length > 40 ? next.slice(next.length - 40) : next;
+            });
+            setSparkPoints((prevPts) => {
+              const next = [...prevPts, a.riskScore];
+              return next.length > 30 ? next.slice(next.length - 30) : next;
+            });
+            setLiveEventCount((c) => c + 1);
           });
           return alertsRes.alerts;
         });
@@ -271,15 +308,32 @@ export default function SocConsole() {
     setFilters((prev) => ({ ...prev, [key]: null }));
   }
 
+  // Shared alert mutation used by the drawer and the My cases playbook.
+  async function updateAlert(id, body) {
+    const { alert } = await jsonFetch(`/api/alerts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setAlerts((prev) => prev.map((a) => (a.id === alert.id ? alert : a)));
+    return alert;
+  }
+
+  // Used by MyCasesPage; surfaces an error toast and rethrows so the page
+  // can keep its checklist state intact on failure.
+  async function handleCaseAction(id, body) {
+    try {
+      return await updateAlert(id, body);
+    } catch (err) {
+      pushToast({ title: "\u2715 Action failed", body: String(err.message || err) });
+      throw err;
+    }
+  }
+
   async function handleAdvanceStatus(status) {
     if (!selectedId) return;
     try {
-      const { alert } = await jsonFetch(`/api/alerts/${selectedId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      setAlerts((prev) => prev.map((a) => (a.id === alert.id ? alert : a)));
+      await updateAlert(selectedId, { status });
     } catch (err) {
       pushToast({ title: "\u2715 Update failed", body: String(err.message || err) });
     }
@@ -367,7 +421,7 @@ export default function SocConsole() {
 
   return (
     <div id="app" className="active">
-      <Sidebar activePage={activePage} onNavigate={handleNavigate} />
+      <Sidebar activePage={activePage} onNavigate={handleNavigate} role={user.role} />
       <div className="main">
         <Topbar activePage={activePage} user={user} onSignOut={handleSignOut} />
 
@@ -392,6 +446,12 @@ export default function SocConsole() {
                 filters={filters}
                 onSelect={setSelectedId}
               />
+            )}
+            {activePage === "mycases" && canRespond(user.role) && (
+              <MyCasesPage alerts={alerts} user={user} onAction={handleCaseAction} onOpen={setSelectedId} />
+            )}
+            {activePage === "admin" && canAdminister(user.role) && (
+              <AdminPage endpoints={endpoints} pushToast={pushToast} onEndpointsChanged={loadConsole} />
             )}
             {activePage === "incidents" && (
               <IncidentsPage incidents={incidents} onSelectAlert={setSelectedId} />
@@ -418,6 +478,7 @@ export default function SocConsole() {
       <Drawer
         alert={selectedAlert}
         analysts={analysts}
+        canRespond={canRespond(user.role)}
         onClose={() => setSelectedId(null)}
         onAdvanceStatus={handleAdvanceStatus}
         onAssign={handleAssign}

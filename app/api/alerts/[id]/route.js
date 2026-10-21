@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { STATUSES } from "@/lib/simulation";
 import { ALERT_INCLUDE } from "@/lib/alertInclude";
-import { getCurrentAnalyst, unauthorized } from "@/lib/auth";
+import { getCurrentAnalyst, unauthorized, forbidden, canRespond } from "@/lib/auth";
+import { sendAssignmentEmail, alertForEmail } from "@/lib/mailer";
 
 export async function PATCH(request, { params }) {
   const me = await getCurrentAnalyst();
   if (!me) return unauthorized();
+  if (!canRespond(me.role)) return forbidden("Security Managers have read-only access.");
   const actorName = me.name;
   const { id } = await params;
 
@@ -58,6 +60,19 @@ export async function PATCH(request, { params }) {
     },
     include: ALERT_INCLUDE,
   });
+
+  // Notify the newly assigned analyst by email (best-effort, non-blocking).
+  const newlyAssigned =
+    data.assignedAnalystId &&
+    data.assignedAnalystId !== existing.assignedAnalystId &&
+    alert.assignedAnalyst?.email;
+  if (newlyAssigned) {
+    try {
+      await sendAssignmentEmail(alertForEmail(alert), alert.assignedAnalyst);
+    } catch (err) {
+      console.error("Assignment email failed:", err);
+    }
+  }
 
   return NextResponse.json({ alert });
 }

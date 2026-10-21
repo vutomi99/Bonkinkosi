@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { reportIncidentEmail } from "@/lib/reportIncident";
-import { getCurrentAnalyst, unauthorized } from "@/lib/auth";
+import { getCurrentAnalyst, unauthorized, forbidden, canRespond } from "@/lib/auth";
 
 export async function POST(request, { params }) {
   const me = await getCurrentAnalyst();
   if (!me) return unauthorized();
+  if (!canRespond(me.role)) return forbidden("Security Managers have read-only access.");
   const reporterName = me.name;
   const { id } = await params;
 

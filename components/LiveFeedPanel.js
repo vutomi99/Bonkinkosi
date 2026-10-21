@@ -122,7 +122,7 @@ export default function LiveFeedPanel({ consoleLines, sparkPoints, isLive, onTog
           <div className="live-head-left">
             <div>
               <div className="live-title">AI risk score — live</div>
-              <div className="live-sub">Isolation Forest inference on each incoming event</div>
+              <div className="live-sub">LLM risk scoring on each incoming event</div>
             </div>
           </div>
         </div>

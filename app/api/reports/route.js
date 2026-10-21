@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAnalyst, unauthorized } from "@/lib/auth";
+import { aiShiftSummary } from "@/lib/aiScoring";
 
 export async function GET() {
   if (!(await getCurrentAnalyst())) return unauthorized();
@@ -20,9 +21,12 @@ export async function POST() {
     prisma.alert.count({ where: { status: "Resolved" } }),
   ]);
 
+  const summary = await aiShiftSummary({ open, investigating, contained, resolved });
+
   const report = await prisma.report.create({
     data: {
       title: `Shift report \u2014 ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`,
+      summary,
       generatedBy,
       openCount: open,
       investigating,

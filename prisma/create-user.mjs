@@ -14,12 +14,19 @@ import { hashPassword } from "../lib/password.js";
 // Same precedence as Next.js: .env.local (secrets, DATABASE_URL) over .env.
 dotenv.config({ path: [".env.local", ".env"], quiet: true });
 
-const [emailArg, password, ...nameParts] = process.argv.slice(2);
+const VALID_ROLES = ["analyst", "admin", "manager"];
+const args = process.argv.slice(2);
+// Optional trailing role arg: analyst | admin | manager (default analyst).
+let role = "analyst";
+if (VALID_ROLES.includes((args[args.length - 1] || "").toLowerCase())) {
+  role = args.pop().toLowerCase();
+}
+const [emailArg, password, ...nameParts] = args;
 const email = (emailArg || "").trim().toLowerCase();
 const name = nameParts.join(" ").trim() || email.split("@")[0];
 
 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !password) {
-  console.error('Usage: npm run user:create -- <email> <password> "<Display Name>"');
+  console.error('Usage: npm run user:create -- <email> <password> "<Display Name>" [analyst|admin|manager]');
   process.exit(1);
 }
 
@@ -32,14 +39,14 @@ try {
   const existing = await prisma.analyst.findUnique({ where: { email } });
   const analyst = await prisma.analyst.upsert({
     where: { email },
-    update: { name, passwordHash },
-    create: { email, name, passwordHash },
+    update: { name, passwordHash, role },
+    create: { email, name, passwordHash, role },
   });
   if (existing) {
     // Password changed: sign out every browser using the old one.
     await prisma.session.deleteMany({ where: { analystId: analyst.id } });
   }
-  console.log(`${existing ? "Updated" : "Created"} account ${analyst.email} (${analyst.name}).`);
+  console.log(`${existing ? "Updated" : "Created"} account ${analyst.email} (${analyst.name}) [${role}].`);
 } finally {
   await prisma.$disconnect();
 }

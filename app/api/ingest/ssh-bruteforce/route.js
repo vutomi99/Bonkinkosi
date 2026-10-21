@@ -9,6 +9,7 @@ import {
 import { reportIncidentEmail } from "@/lib/reportIncident";
 import { correlateAlert } from "@/lib/correlate";
 import { ALERT_INCLUDE } from "@/lib/alertInclude";
+import { aiAssessEvent } from "@/lib/aiScoring";
 
 /**
  * Called by agent/ssh_bruteforce_watcher.py running on a real victim VM.
@@ -62,7 +63,18 @@ export async function POST(request) {
     create: { code: endpointCode },
   });
 
-  const riskScore = scoreRealBruteForce(failedLoginCount);
+  // AI risk scoring (OpenRouter), with the rule-based score as fallback.
+  const assessment = await aiAssessEvent(
+    {
+      attackType: "brute_force",
+      endpointCode,
+      sourceIp,
+      failedLogins: failedLoginCount,
+      windowSeconds: windowSeconds || 60,
+    },
+    scoreRealBruteForce(failedLoginCount)
+  );
+  const riskScore = assessment.riskScore;
   if (riskScore < ALERT_THRESHOLD) {
     // Real, but not severe enough yet to raise a case - acknowledge without creating one.
     return NextResponse.json({ received: true, alertCreated: false, riskScore });
@@ -76,6 +88,12 @@ export async function POST(request) {
       text: `Live agent on ${endpointCode} detected ${failedLoginCount} failed SSH logins from ${sourceIp} in the last ${
         windowSeconds || 60
       }s - risk score ${riskScore}/100 (real attack, not simulated).`,
+    },
+    {
+      text:
+        assessment.scoredBy === "ai"
+          ? `AI risk engine (${assessment.model}): ${assessment.rationale}`
+          : `Risk engine: ${assessment.rationale}`,
     },
   ];
   if (autoResponse) {

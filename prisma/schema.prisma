@@ -34,6 +34,7 @@ model Analyst {
   name         String
   email        String?  @unique
   passwordHash String? // "scrypt$<salt>$<hash>", see lib/auth.js
+  role         String   @default("analyst") // analyst | admin | manager
   createdAt    DateTime @default(now())
 
   assignedAlerts Alert[]
@@ -131,6 +132,7 @@ model TimelineEntry {
 model Report {
   id            String   @id @default(cuid())
   title         String
+  summary       String? // AI-generated executive summary (lib/aiScoring.js)
   generatedBy   String
   openCount     Int
   investigating Int

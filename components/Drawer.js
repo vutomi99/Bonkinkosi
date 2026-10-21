@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { STATUSES, ATTACK_META, timeAgo } from "@/lib/simulation";
 
-export default function Drawer({ alert, analysts, onClose, onAdvanceStatus, onAssign, onAddNote, onSendEmail }) {
+export default function Drawer({ alert, analysts, canRespond = true, onClose, onAdvanceStatus, onAssign, onAddNote, onSendEmail }) {
   const [note, setNote] = useState("");
   const active = Boolean(alert);
 
@@ -36,6 +36,11 @@ export default function Drawer({ alert, analysts, onClose, onAdvanceStatus, onAs
               </div>
             </div>
             <div className="drawer-body">
+              {!canRespond && (
+                <div className="email-status" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text-muted)", marginBottom: 16 }}>
+                  Read-only view (Security Manager) — case actions are disabled.
+                </div>
+              )}
               <div className="kv-grid">
                 <div className="kv">
                   <div className="k">Endpoint</div>
@@ -63,7 +68,12 @@ export default function Drawer({ alert, analysts, onClose, onAdvanceStatus, onAs
                   const stepIdx = STATUSES.indexOf(alert.status);
                   const done = i <= stepIdx;
                   return (
-                    <div className="step" key={s} onClick={() => onAdvanceStatus(s)}>
+                    <div
+                      className="step"
+                      key={s}
+                      onClick={canRespond ? () => onAdvanceStatus(s) : undefined}
+                      style={{ cursor: canRespond ? "pointer" : "default" }}
+                    >
                       {i > 0 && <div className={`line${done ? " done" : ""}`}></div>}
                       <div className={`circle${done ? " done" : ""}`}>{i < stepIdx ? "\u2713" : i + 1}</div>
                       <div className={`lbl${done ? " done" : ""}`}>{s}</div>
@@ -72,14 +82,18 @@ export default function Drawer({ alert, analysts, onClose, onAdvanceStatus, onAs
                 })}
               </div>
 
-              <div className="section-label">Report this incident</div>
-              <button
-                className="email-btn"
-                disabled={alert.emailStatus === "sending"}
-                onClick={onSendEmail}
-              >
-                {alert.emailStatus === "sending" ? "Sending\u2026" : "\ud83d\udce7 Send incident report email"}
-              </button>
+              {canRespond && (
+                <>
+                  <div className="section-label">Report this incident</div>
+                  <button
+                    className="email-btn"
+                    disabled={alert.emailStatus === "sending"}
+                    onClick={onSendEmail}
+                  >
+                    {alert.emailStatus === "sending" ? "Sending\u2026" : "\ud83d\udce7 Send incident report email"}
+                  </button>
+                </>
+              )}
               {alert.emailStatus === "sent" && (
                 <div className="email-status sent">✓ Email sent to the SOC distribution list.</div>
               )}
@@ -114,6 +128,7 @@ export default function Drawer({ alert, analysts, onClose, onAdvanceStatus, onAs
               <div className="section-label">Assigned analyst</div>
               <select
                 style={{ marginBottom: 22 }}
+                disabled={!canRespond}
                 value={alert.assignedAnalystId || ""}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -129,23 +144,27 @@ export default function Drawer({ alert, analysts, onClose, onAdvanceStatus, onAs
                 ))}
               </select>
 
-              <div className="section-label">Add investigation note</div>
-              <textarea
-                placeholder="e.g. Confirmed with endpoint owner, isolating host from network..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-              <button
-                className="btn btn-primary"
-                style={{ marginTop: 0, marginBottom: 22 }}
-                onClick={() => {
-                  if (!note.trim()) return;
-                  onAddNote(note.trim());
-                  setNote("");
-                }}
-              >
-                Add note to timeline
-              </button>
+              {canRespond && (
+                <>
+                  <div className="section-label">Add investigation note</div>
+                  <textarea
+                    placeholder="e.g. Confirmed with endpoint owner, isolating host from network..."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    style={{ marginTop: 0, marginBottom: 22 }}
+                    onClick={() => {
+                      if (!note.trim()) return;
+                      onAddNote(note.trim());
+                      setNote("");
+                    }}
+                  >
+                    Add note to timeline
+                  </button>
+                </>
+              )}
 
               <div className="section-label">Timeline</div>
               <div className="timeline">
